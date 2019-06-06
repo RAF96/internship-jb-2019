@@ -1,7 +1,7 @@
 
 # Solve
 
-MAXVALUE = ...
+MAXVALUE = 1e6
 
 $ money_{n, r, i} $ - Цена, по которой купил человек n, из региона r, товар i. $ money \in [0, MAXVALUE) $
 
@@ -85,7 +85,7 @@ $ \forall n, r \sum_{i} money_{n, r, i} <=  nat_{n, r} * MAXVALUE $
 
 Ограничения nat
 
-$ \forall n \sum_{r} nat_{n, r} <= 1 $
+$ \forall n \sum_{r} nat_{n, r} = 1 $
 
 $ \forall r \sum_{n} nat_{n, r} = table2\_n_{r} $
 
@@ -121,12 +121,6 @@ $ \forall n, i : \sum_{r} money_{n, r, i} <=  buy_{n, i} * MAXVALUE $
 
 Итоговое количество переменных: ~ 3800
 
-Итоговое количество уравнений: ~ _
-
-# Result
-
-Проект не увенчался успехом, так как алгоритм не останавливается за разумное время (час). Скорее всего, из-за большого количества логических переменных библиотека не может дать результат.
-
 # Code
 
 
@@ -137,27 +131,15 @@ import time
 
 
 ```python
-start = time.time()
-start
-```
-
-
-
-
-    1558442393.567904
-
-
-
-
-```python
 from pulp import *
 import numpy as np
 import random
+import pandas as pd
 ```
 
 
 ```python
-MAXVALUE = 1e4
+MAXVALUE = 1e6
 ```
 
 
@@ -277,7 +259,7 @@ for n in range(len_n):
 
 
 ```python
-prob = LpProblem('task', LpMaximize)
+prob = LpProblem('task', LpMinimize)
 
 prob += lpSum(_money)
 ```
@@ -362,67 +344,78 @@ for n in range(len_n):
 
 
 ```python
+seg_2 = [[33e3, 36e3],
+       [120e3, 125e3],
+       [10e3, 13e3]]
+table2_n = [22, 60, 13]
+```
+
+
+```python
+for r in range(len_r):
+    prob += lpSum([money(n=n, r=r, i=i) for n in range(len_n) for i in range(len_i)] ) >= seg_2[r][0]
+    prob += lpSum([money(n=n, r=r, i=i) for n in range(len_n) for i in range(len_i)] ) <= seg_2[r][1]
+```
+
+
+```python
+for r in range(len_r):
+    for n in range(len_n):
+        prob += lpSum([money(n=n, r=r, i=i) for i in range(len_i)]) <= nat(n=n, r=r) * MAXVALUE
+```
+
+
+```python
+for n in range(len_n):
+    prob += lpSum([nat(n=n, r=r) for r in range(len_r)]) == 1
+```
+
+
+```python
+for r in range(len_r):
+    prob += lpSum([nat(n=n, r=r) for n in range(len_n)]) == table2_n[r]
+```
+
+
+```python
+seg_3 = [[4e3,6e3], 
+         [28e3,30e3], 
+         [105e3,109e3], 
+         [16e3,18e3], 
+         [10e3,12e3]] 
+table3_n = [77,87,95,91,51]
+```
+
+
+```python
+for i in range(len_i):
+    prob += lpSum([money(n=n,r=r,i=i) for r in range(len_r) for n in range(len_n)]) >= seg_3[i][0]
+    prob += lpSum([money(n=n,r=r,i=i) for r in range(len_r) for n in range(len_n)]) <= seg_3[i][1]
+```
+
+
+```python
+for i in range(len_i):
+    prob += lpSum([buy(n=n,i=i) for n in range(len_n)]) == table3_n[i]
+```
+
+
+```python
+for i in range(len_i):
+    for n in range(len_i):
+        prob += lpSum([money(n=n,r=r,i=i) for r in range(len_r)]) <= buy(n=n, i=i) * MAXVALUE
+```
+
+
+```python
 prob.solve()
 ```
 
 
-    ---------------------------------------------------------------------------
-
-    KeyboardInterrupt                         Traceback (most recent call last)
-
-    <ipython-input-28-613465fcbb4d> in <module>
-    ----> 1 prob.solve()
-    
-
-    ~/.conda/envs/common/lib/python3.7/site-packages/pulp/pulp.py in solve(self, solver, **kwargs)
-       1662         #time it
-       1663         self.solutionTime = -clock()
-    -> 1664         status = solver.actualSolve(self, **kwargs)
-       1665         self.solutionTime += clock()
-       1666         self.restoreObjective(wasNone, dummyVar)
 
 
-    ~/.conda/envs/common/lib/python3.7/site-packages/pulp/solvers.py in actualSolve(self, lp, **kwargs)
-       1360     def actualSolve(self, lp, **kwargs):
-       1361         """Solve a well formulated lp problem"""
-    -> 1362         return self.solve_CBC(lp, **kwargs)
-       1363 
-       1364     def available(self):
+    1
 
-
-    ~/.conda/envs/common/lib/python3.7/site-packages/pulp/solvers.py in solve_CBC(self, lp, use_mps)
-       1419         cbc = subprocess.Popen((self.path + cmds).split(), stdout = pipe,
-       1420                              stderr = pipe)
-    -> 1421         if cbc.wait() != 0:
-       1422             raise PulpSolverError("Pulp: Error while trying to execute " +  \
-       1423                                     self.path)
-
-
-    ~/.conda/envs/common/lib/python3.7/subprocess.py in wait(self, timeout)
-        988             endtime = _time() + timeout
-        989         try:
-    --> 990             return self._wait(timeout=timeout)
-        991         except KeyboardInterrupt:
-        992             # https://bugs.python.org/issue25942
-
-
-    ~/.conda/envs/common/lib/python3.7/subprocess.py in _wait(self, timeout)
-       1622                         if self.returncode is not None:
-       1623                             break  # Another thread waited.
-    -> 1624                         (pid, sts) = self._try_wait(0)
-       1625                         # Check the pid and loop as waitpid has been known to
-       1626                         # return 0 even without WNOHANG in odd situations.
-
-
-    ~/.conda/envs/common/lib/python3.7/subprocess.py in _try_wait(self, wait_flags)
-       1580             """All callers to this function MUST hold self._waitpid_lock."""
-       1581             try:
-    -> 1582                 (pid, sts) = os.waitpid(self.pid, wait_flags)
-       1583             except ChildProcessError:
-       1584                 # This happens if SIGCLD is set to be ignored or waiting
-
-
-    KeyboardInterrupt: 
 
 
 
@@ -430,22 +423,168 @@ prob.solve()
 print( "Status:", LpStatus[prob.status])
 ```
 
+    Status: Optimal
+
+
 
 ```python
-for v in prob.variables():
-    print(v.name, "=", v.varValue)
+# for v in prob.variables():
+#     print(v.name, "=", v.varValue)
+```
+
+# Check
+
+
+```python
+# First condition
+check_table1 = [0] * 7
+for n in range(len_n):
+    
+    def index_of_check_table(value):
+        index_of_check_table = min(int(value / 1e3), 6)
+        return index_of_check_table
+    
+    res = sum(money(n=n, r=r, i=i).value() for i in range(len_i) for r in range(len_r))
+    check_table1[index_of_check_table(res)] += 1
+check_table1
+```
+
+
+
+
+    [32, 38, 10, 8, 2, 2, 3]
+
+
+
+
+```python
+# Second condition
+check_table2_sum = [0] * 3
+check_table2_num = [0] * 3
+
+for r in range(len_r):
+    for n in range(len_n):
+        check_table2_num[r] += nat(n=n, r=r).value()
+        check_table2_sum[r] += sum(money(n=n, r=r, i=i).value() for i in range(len_i))
+        num_of_nat = sum(nat(n=n, r=r).value() for r in range(len_r))
+        if num_of_nat != 1:
+            print("Warning: number of nation for {} person is {}".format(n, num_of_nat))
+        
+print(check_table2_num)
+print(check_table2_sum)
+```
+
+    [22.0, 60.0, 13.0]
+    [33000.0, 120000.0, 10000.0]
+
+
+
+```python
+# Third condition
+check_table_3_sum = [0] * 5
+check_table_3_num = [0] * 5
+for i in range(len_i):
+    for n in range(len_n):
+        check_table_3_num[i] += buy(n=n, i=i).value()
+        check_table_3_sum[i] += sum(money(n=n,r=r,i=i).value() for r in range(len_r))
+        
+print(check_table_3_num)
+print(check_table_3_sum)
+```
+
+    [77.0, 87.0, 95.0, 91.0, 51.0]
+    [4000.0, 28000.0, 105000.0, 16000.0, 10000.0]
+
+
+
+```python
+# Result
+print(sum(money(n=n, r=r, i=i).value() for i in range(len_i) for r in range(len_r) for n in range(len_n)))
+```
+
+    163000.0
+
+
+
+```python
+data = pd.DataFrame([[sum(money(n=n, r=r, i=i).value()
+                     for n in range(len_n)) for i in range(len_i)] for r in range(len_r)], 
+                    index=['EU', 'US', 'ROW'],
+                    columns=['A', 'B', 'C', 'D', 'X'])
 ```
 
 
 ```python
-end = time.time()
-end - start
+data
 ```
 
 
-```python
 
-```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>A</th>
+      <th>B</th>
+      <th>C</th>
+      <th>D</th>
+      <th>X</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>EU</th>
+      <td>0.0</td>
+      <td>8000.0</td>
+      <td>22000.0</td>
+      <td>0.0</td>
+      <td>3000.0</td>
+    </tr>
+    <tr>
+      <th>US</th>
+      <td>4000.0</td>
+      <td>17000.0</td>
+      <td>79000.0</td>
+      <td>13000.0</td>
+      <td>7000.0</td>
+    </tr>
+    <tr>
+      <th>ROW</th>
+      <td>0.0</td>
+      <td>3000.0</td>
+      <td>4000.0</td>
+      <td>3000.0</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+# Summary 
+
+Результаты подходят под все ограничения.
+Модель находит результаты от 163e3 до 174e3.
+
+# Особенности
+
+Визуально заметно, что переменная buy, то-есть ограничение по количесвту покупок, плохо взаимосвязано с количество потраченных денег. Так, встречаются данные, в которых человек купил все товары, но при этом суммарно потратил 0. То-есть как-будто получил все бесплатно. С другой стороны, по имеющимся данным, кажется такая ситуация вполне возможна и ей не стоит пренебрегать или ограничивать.
 
 
 ```python
